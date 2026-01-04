@@ -1,0 +1,444 @@
+'use client';
+
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import {
+    PromptState,
+    initialPromptState,
+    Preset,
+    SavedScene,
+    SavedCharacter,
+    PromptHistoryItem
+} from '@/types/wizard';
+import { useSession } from 'next-auth/react';
+import { Language, translations } from '@/constants/translations';
+
+interface WizardContextType {
+    state: PromptState;
+    updateState: <K extends keyof PromptState>(
+        section: K,
+        updates: Partial<PromptState[K]>
+    ) => void;
+    resetState: () => void;
+    currentStep: number;
+    setStep: (step: number) => void;
+    isReady: boolean;
+    presets: Preset[];
+    savePreset: (name: string, description: string) => void;
+    deletePreset: (id: string) => void;
+    loadPreset: (preset: Preset) => void;
+    theme: 'light' | 'dark';
+    toggleTheme: () => void;
+
+    // New features
+    savedScenes: SavedScene[];
+    saveScene: (name: string) => void;
+    deleteScene: (id: string) => void;
+    loadScene: (scene: SavedScene) => void;
+
+    savedCharacters: SavedCharacter[];
+    saveCharacter: (name: string) => void;
+    deleteCharacter: (id: string) => void;
+    loadCharacter: (character: SavedCharacter) => void;
+
+    history: PromptHistoryItem[];
+    addToHistory: (prompt: string) => void;
+    clearHistory: () => void;
+
+    // Language
+    language: Language;
+    toggleLanguage: () => void;
+    t: (key: keyof typeof translations.en) => string;
+}
+
+const WizardContext = createContext<WizardContextType | undefined>(undefined);
+
+export function WizardProvider({ children }: { children: ReactNode }) {
+    const [state, setState] = useState<PromptState>(initialPromptState);
+    const [currentStep, setCurrentStep] = useState(0);
+    const [presets, setPresets] = useState<Preset[]>([]);
+    const [savedScenes, setSavedScenes] = useState<SavedScene[]>([]);
+    const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>([]);
+    const [history, setHistory] = useState<PromptHistoryItem[]>([]);
+    const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+    const [language, setLanguage] = useState<Language>('en');
+    const [isReady, setIsReady] = useState(false);
+    const { data: session, status } = useSession();
+
+    // Fetch data from DB if logged in
+    useEffect(() => {
+        if (status === 'authenticated') {
+            fetch('/api/user/data')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.presets) setPresets(data.presets);
+                    if (data.snippets) {
+                        setSavedScenes(data.snippets.filter((s: any) => s.type === 'scene'));
+                        setSavedCharacters(data.snippets.filter((s: any) => s.type === 'character'));
+                    }
+                    if (data.history) setHistory(data.history);
+                })
+                .catch(err => console.error('Failed to fetch user data:', err));
+        }
+    }, [status]);
+    useEffect(() => {
+        const saved = localStorage.getItem('veo_prompt_state');
+        if (saved) {
+            try { setState(JSON.parse(saved)); } catch (e) { console.error(e); }
+        }
+        const savedStep = localStorage.getItem('veo_current_step');
+        if (savedStep) {
+            setCurrentStep(parseInt(savedStep, 10));
+        }
+        const savedPresets = localStorage.getItem('veo_presets');
+        if (savedPresets) {
+            try { setPresets(JSON.parse(savedPresets)); } catch (e) { console.error(e); }
+        }
+        const savedScenes = localStorage.getItem('veo_saved_scenes');
+        if (savedScenes) {
+            try { setSavedScenes(JSON.parse(savedScenes)); } catch (e) { console.error(e); }
+        }
+        const savedCharacters = localStorage.getItem('veo_saved_characters');
+        if (savedCharacters) {
+            try { setSavedCharacters(JSON.parse(savedCharacters)); } catch (e) { console.error(e); }
+        }
+        const savedHistory = localStorage.getItem('veo_history');
+        if (savedHistory) {
+            try { setHistory(JSON.parse(savedHistory)); } catch (e) { console.error(e); }
+        }
+        const savedTheme = localStorage.getItem('veo_theme') as 'light' | 'dark';
+        if (savedTheme) {
+            setTheme(savedTheme);
+        }
+        const savedLang = localStorage.getItem('veo_lang') as Language;
+        if (savedLang) {
+            setLanguage(savedLang);
+        }
+        setIsReady(true);
+    }, []);
+
+    // Update document class when theme changes
+    useEffect(() => {
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        localStorage.setItem('veo_theme', theme);
+    }, [theme]);
+
+    // Save to localStorage on change
+    useEffect(() => {
+        if (isReady) {
+            // Always save WIP state for session continuity
+            localStorage.setItem('veo_prompt_state', JSON.stringify(state));
+            localStorage.setItem('veo_current_step', currentStep.toString());
+
+            if (status === 'authenticated') {
+                localStorage.setItem('veo_presets', JSON.stringify(presets));
+                localStorage.setItem('veo_saved_scenes', JSON.stringify(savedScenes));
+                localStorage.setItem('veo_saved_characters', JSON.stringify(savedCharacters));
+                localStorage.setItem('veo_history', JSON.stringify(history));
+            } else {
+                // For guests, we don't persist these items across refreshes (as per your request "but not save")
+                // However, we keep them in state while they are using the app in this session.
+                localStorage.removeItem('veo_presets');
+                localStorage.removeItem('veo_saved_scenes');
+                localStorage.removeItem('veo_saved_characters');
+                localStorage.removeItem('veo_history');
+            }
+        }
+    }, [state, currentStep, presets, savedScenes, savedCharacters, history, isReady, status]);
+
+    const updateState = <K extends keyof PromptState>(
+        section: K,
+        updates: Partial<PromptState[K]>
+    ) => {
+        setState((prev) => ({
+            ...prev,
+            [section]: { ...prev[section], ...updates },
+        }));
+    };
+
+    const resetState = () => {
+        if (confirm('Are you sure you want to reset the entire wizard?')) {
+            setState(initialPromptState);
+            setCurrentStep(0);
+        }
+    };
+
+    const savePreset = async (name: string, description: string) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        const newPreset: Preset = {
+            id,
+            name,
+            description,
+            createdAt: Date.now(),
+            promptState: state,
+        };
+
+        if (status === 'authenticated') {
+            try {
+                const res = await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'preset',
+                        action: 'save',
+                        data: { name, description, promptState: state }
+                    })
+                });
+                const saved = await res.json();
+                newPreset.id = saved._id;
+            } catch (err) {
+                console.error('Failed to save preset to DB:', err);
+            }
+        }
+
+        setPresets([newPreset, ...presets]);
+    };
+
+    const deletePreset = async (id: string) => {
+        if (status === 'authenticated') {
+            try {
+                await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'preset',
+                        action: 'delete',
+                        data: { id }
+                    })
+                });
+            } catch (err) {
+                console.error('Failed to delete preset from DB:', err);
+            }
+        }
+        setPresets(presets.filter(p => p.id !== id));
+    };
+
+    const loadPreset = (preset: Preset) => {
+        setState(preset.promptState);
+        setCurrentStep(0);
+    };
+
+    // Scene Snippets
+    const saveScene = async (name: string) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        const newScene: SavedScene = {
+            id,
+            name,
+            data: state.scene,
+            createdAt: Date.now(),
+        };
+
+        if (status === 'authenticated') {
+            try {
+                const res = await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'snippet',
+                        action: 'save',
+                        data: { name, type: 'scene', data: state.scene }
+                    })
+                });
+                const saved = await res.json();
+                newScene.id = saved._id;
+            } catch (err) {
+                console.error('Failed to save scene to DB:', err);
+            }
+        }
+        setSavedScenes([newScene, ...savedScenes]);
+    };
+
+    const deleteScene = async (id: string) => {
+        if (status === 'authenticated') {
+            try {
+                await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'snippet',
+                        action: 'delete',
+                        data: { id }
+                    })
+                });
+            } catch (err) {
+                console.error('Failed to delete scene from DB:', err);
+            }
+        }
+        setSavedScenes(savedScenes.filter(s => s.id !== id));
+    };
+
+    const loadScene = (scene: SavedScene) => {
+        updateState('scene', scene.data);
+    };
+
+    // Character Snippets
+    const saveCharacter = async (name: string) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        const newChar: SavedCharacter = {
+            id,
+            name,
+            data: state.characters,
+            createdAt: Date.now(),
+        };
+
+        if (status === 'authenticated') {
+            try {
+                const res = await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'snippet',
+                        action: 'save',
+                        data: { name, type: 'character', data: state.characters }
+                    })
+                });
+                const saved = await res.json();
+                newChar.id = saved._id;
+            } catch (err) {
+                console.error('Failed to save character to DB:', err);
+            }
+        }
+        setSavedCharacters([newChar, ...savedCharacters]);
+    };
+
+    const deleteCharacter = async (id: string) => {
+        if (status === 'authenticated') {
+            try {
+                await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'snippet',
+                        action: 'delete',
+                        data: { id }
+                    })
+                });
+            } catch (err) {
+                console.error('Failed to delete character from DB:', err);
+            }
+        }
+        setSavedCharacters(savedCharacters.filter(c => c.id !== id));
+    };
+
+    const loadCharacter = (character: SavedCharacter) => {
+        updateState('characters', character.data);
+    };
+
+    // History
+    const addToHistory = async (prompt: string) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        const newItem: PromptHistoryItem = {
+            id,
+            prompt,
+            state: { ...state },
+            createdAt: Date.now(),
+        };
+
+        if (status === 'authenticated') {
+            try {
+                const res = await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'history',
+                        action: 'add',
+                        data: { prompt, state }
+                    })
+                });
+                const saved = await res.json();
+                newItem.id = saved._id;
+            } catch (err) {
+                console.error('Failed to add to history in DB:', err);
+            }
+        }
+
+        // Keep only last 50 items
+        setHistory((prev) => [newItem, ...prev].slice(0, 50));
+    };
+
+    const clearHistory = async () => {
+        if (confirm('Are you sure you want to clear your prompt history?')) {
+            if (status === 'authenticated') {
+                try {
+                    await fetch('/api/user/data', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'history',
+                            action: 'clear'
+                        })
+                    });
+                } catch (err) {
+                    console.error('Failed to clear history in DB:', err);
+                }
+            }
+            setHistory([]);
+        }
+    };
+
+    const setStep = (step: number) => {
+        setCurrentStep(step);
+    };
+
+    const toggleTheme = () => {
+        setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    };
+
+    const toggleLanguage = () => {
+        setLanguage(prev => {
+            const next = prev === 'en' ? 'bn' : 'en';
+            localStorage.setItem('veo_lang', next);
+            return next;
+        });
+    };
+
+    const t = (key: keyof typeof translations.en) => {
+        return translations[language][key] || translations.en[key] || key;
+    };
+
+    return (
+        <WizardContext.Provider
+            value={{
+                state,
+                updateState,
+                resetState,
+                currentStep,
+                setStep,
+                isReady,
+                presets,
+                savePreset,
+                deletePreset,
+                loadPreset,
+                theme,
+                toggleTheme,
+                savedScenes,
+                saveScene,
+                deleteScene,
+                loadScene,
+                savedCharacters,
+                saveCharacter,
+                deleteCharacter,
+                loadCharacter,
+                history,
+                addToHistory,
+                clearHistory,
+                language,
+                toggleLanguage,
+                t
+            }}
+        >
+            {children}
+        </WizardContext.Provider>
+    );
+}
+
+export function useWizard() {
+    const context = useContext(WizardContext);
+    if (context === undefined) {
+        throw new Error('useWizard must be used within a WizardProvider');
+    }
+    return context;
+}
