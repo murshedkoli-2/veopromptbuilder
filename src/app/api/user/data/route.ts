@@ -70,6 +70,14 @@ export async function POST(req: Request) {
                 const snippet = await SnippetModel.create({ userId, ...data });
                 return NextResponse.json(snippet);
             }
+            if (action === 'update') {
+                const snippet = await SnippetModel.findOneAndUpdate(
+                    { _id: data.id, userId },
+                    { name: data.name, data: data.data },
+                    { new: true }
+                );
+                return NextResponse.json(snippet);
+            }
             if (action === 'delete') {
                 await SnippetModel.deleteOne({ _id: data.id, userId });
                 return NextResponse.json({ success: true });

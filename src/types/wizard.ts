@@ -15,6 +15,7 @@ export interface CharacterState {
   emotions: string;
   props: string;
   culturalNotes: string;
+  description?: string;
 }
 
 export interface CameraState {
@@ -87,6 +88,15 @@ export interface PromptHistoryItem {
   createdAt: number;
 }
 
+export interface Story {
+  id: string;
+  name: string;
+  description: string;
+  scenes: PromptState[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export const initialPromptState: PromptState = {
   scene: {
     location: '',
@@ -104,6 +114,7 @@ export const initialPromptState: PromptState = {
     emotions: '',
     props: '',
     culturalNotes: '',
+    description: '',
   },
   camera: {
     shotType: '',

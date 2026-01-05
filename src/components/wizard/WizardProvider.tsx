@@ -7,7 +7,8 @@ import {
     Preset,
     SavedScene,
     SavedCharacter,
-    PromptHistoryItem
+    PromptHistoryItem,
+    Story
 } from '@/types/wizard';
 import { useSession } from 'next-auth/react';
 import { Language, translations } from '@/constants/translations';
@@ -37,8 +38,15 @@ interface WizardContextType {
 
     savedCharacters: SavedCharacter[];
     saveCharacter: (name: string) => void;
+    updateCharacter: (id: string, name: string, data: any) => void;
     deleteCharacter: (id: string) => void;
     loadCharacter: (character: SavedCharacter) => void;
+
+    // Stories (New)
+    stories: Story[];
+    saveStory: (name: string, description: string, scenes: PromptState[]) => void;
+    deleteStory: (id: string) => void;
+    loadStory: (story: Story) => void;
 
     history: PromptHistoryItem[];
     addToHistory: (prompt: string) => void;
@@ -58,6 +66,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     const [presets, setPresets] = useState<Preset[]>([]);
     const [savedScenes, setSavedScenes] = useState<SavedScene[]>([]);
     const [savedCharacters, setSavedCharacters] = useState<SavedCharacter[]>([]);
+    const [stories, setStories] = useState<Story[]>([]); // Stories State
     const [history, setHistory] = useState<PromptHistoryItem[]>([]);
     const [theme, setTheme] = useState<'light' | 'dark'>('dark');
     const [language, setLanguage] = useState<Language>('en');
@@ -71,6 +80,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
                 .then(res => res.json())
                 .then(data => {
                     if (data.presets) setPresets(data.presets);
+                    if (data.stories) setStories(data.stories); // Fetch stories
                     if (data.snippets) {
                         setSavedScenes(data.snippets.filter((s: any) => s.type === 'scene'));
                         setSavedCharacters(data.snippets.filter((s: any) => s.type === 'character'));
@@ -92,6 +102,10 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         const savedPresets = localStorage.getItem('veo_presets');
         if (savedPresets) {
             try { setPresets(JSON.parse(savedPresets)); } catch (e) { console.error(e); }
+        }
+        const savedStories = localStorage.getItem('veo_stories');
+        if (savedStories) {
+            try { setStories(JSON.parse(savedStories)); } catch (e) { console.error(e); }
         }
         const savedScenes = localStorage.getItem('veo_saved_scenes');
         if (savedScenes) {
@@ -135,6 +149,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
 
             if (status === 'authenticated') {
                 localStorage.setItem('veo_presets', JSON.stringify(presets));
+                localStorage.setItem('veo_stories', JSON.stringify(stories));
                 localStorage.setItem('veo_saved_scenes', JSON.stringify(savedScenes));
                 localStorage.setItem('veo_saved_characters', JSON.stringify(savedCharacters));
                 localStorage.setItem('veo_history', JSON.stringify(history));
@@ -142,12 +157,13 @@ export function WizardProvider({ children }: { children: ReactNode }) {
                 // For guests, we don't persist these items across refreshes (as per your request "but not save")
                 // However, we keep them in state while they are using the app in this session.
                 localStorage.removeItem('veo_presets');
+                localStorage.removeItem('veo_stories');
                 localStorage.removeItem('veo_saved_scenes');
                 localStorage.removeItem('veo_saved_characters');
                 localStorage.removeItem('veo_history');
             }
         }
-    }, [state, currentStep, presets, savedScenes, savedCharacters, history, isReady, status]);
+    }, [state, currentStep, presets, stories, savedScenes, savedCharacters, history, isReady, status]);
 
     const updateState = <K extends keyof PromptState>(
         section: K,
@@ -327,6 +343,88 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         updateState('characters', character.data);
     };
 
+    const updateCharacter = async (id: string, name: string, data: any) => {
+        const updatedChar = savedCharacters.find(c => c.id === id);
+        if (!updatedChar) return;
+
+        updatedChar.name = name;
+        updatedChar.data = data;
+
+        if (status === 'authenticated') {
+            try {
+                await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'snippet',
+                        action: 'update',
+                        data: { id, name, type: 'character', data }
+                    })
+                });
+            } catch (err) {
+                console.error('Failed to update character in DB:', err);
+            }
+        }
+        setSavedCharacters([...savedCharacters]);
+    };
+
+    // Stories
+    const saveStory = async (name: string, description: string, scenes: PromptState[]) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        const newStory: Story = {
+            id,
+            name,
+            description,
+            scenes,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+
+        if (status === 'authenticated') {
+            try {
+                const res = await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'story',
+                        action: 'save',
+                        data: { name, description, scenes }
+                    })
+                });
+                const saved = await res.json();
+                newStory.id = saved._id;
+            } catch (err) {
+                console.error('Failed to save story to DB:', err);
+            }
+        }
+        setStories([newStory, ...stories]);
+    };
+
+    const deleteStory = async (id: string) => {
+        if (status === 'authenticated') {
+            try {
+                await fetch('/api/user/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'story',
+                        action: 'delete',
+                        data: { id }
+                    })
+                });
+            } catch (err) {
+                console.error('Failed to delete story from DB:', err);
+            }
+        }
+        setStories(stories.filter(s => s.id !== id));
+    };
+
+    const loadStory = (story: Story) => {
+        // Placeholder: Loading a story might be different than loading a single preset.
+        // For now, maybe load the first scene? Or we just manage it in the story builder UI.
+        console.log("Loaded story:", story);
+    };
+
     // History
     const addToHistory = async (prompt: string) => {
         const id = Math.random().toString(36).substr(2, 9);
@@ -420,6 +518,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
                 loadScene,
                 savedCharacters,
                 saveCharacter,
+                updateCharacter,
                 deleteCharacter,
                 loadCharacter,
                 history,
@@ -427,7 +526,11 @@ export function WizardProvider({ children }: { children: ReactNode }) {
                 clearHistory,
                 language,
                 toggleLanguage,
-                t
+                t,
+                stories,
+                saveStory,
+                deleteStory,
+                loadStory
             }}
         >
             {children}

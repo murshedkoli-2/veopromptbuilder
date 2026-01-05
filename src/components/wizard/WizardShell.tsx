@@ -3,14 +3,23 @@ import { useWizard } from './WizardProvider';
 import { STEPS } from '@/constants/options';
 import PreviewPanel from './PreviewPanel';
 import { validateStep } from '@/lib/prompt-utils';
-import { AlertCircle, Sun, Moon, User, LogOut, LogIn, Languages } from 'lucide-react';
+import { AlertCircle, Sun, Moon, User, LogOut, LogIn, Languages, Save, X } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import Modal from '@/components/ui/Modal';
+import { useRouter } from 'next/navigation';
 
 export default function WizardShell({ children }: { children: React.ReactNode }) {
-    const { currentStep, setStep, isReady, state, theme, toggleTheme, language, toggleLanguage, t } = useWizard();
+    const { currentStep, setStep, isReady, state, theme, toggleTheme, language, toggleLanguage, t, savePreset, resetState } = useWizard();
     const { data: session } = useSession();
     const [error, setError] = useState<string | null>(null);
+    const router = useRouter();
+
+    // Save Modal State
+    const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+    const [promptName, setPromptName] = useState('');
+    const [promptDescription, setPromptDescription] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     if (!isReady) return null;
 
@@ -24,7 +33,36 @@ export default function WizardShell({ children }: { children: React.ReactNode })
             return;
         }
         setError(null);
-        setStep(Math.min(STEPS.length - 1, currentStep + 1));
+
+        if (currentStep === STEPS.length - 1) {
+            // Open Save Modal on Finish
+            setPromptName('');
+            setPromptDescription('');
+            setIsSaveModalOpen(true);
+        } else {
+            setStep(Math.min(STEPS.length - 1, currentStep + 1));
+        }
+    };
+
+    const handleSaveConfirm = async () => {
+        if (!promptName.trim()) {
+            setError('Please enter a name for your prompt.');
+            return;
+        }
+        setIsSaving(true);
+        try {
+            await savePreset(promptName, promptDescription);
+            setIsSaveModalOpen(false);
+            // Optional: Reset wizard state or keep it? 
+            // Usually nice to reset so they can start fresh, or navigate away.
+            resetState();
+            router.push('/library');
+        } catch (error) {
+            console.error(error);
+            setError('Failed to save prompt.');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleBack = () => {
@@ -46,6 +84,14 @@ export default function WizardShell({ children }: { children: React.ReactNode })
                     <div className="max-w-3xl mx-auto w-full">
                         <div className="flex justify-between items-end mb-2">
                             <div className="flex items-center gap-4">
+                                <Link
+                                    href="/"
+                                    className="p-2 -ml-2 rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground transition-all active:scale-95"
+                                    title="Exit Builder"
+                                >
+                                    <X className="w-5 h-5" />
+                                </Link>
+
                                 <div>
                                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                         {t('step')} {currentStep + 1} {t('of')} {STEPS.length}
@@ -151,10 +197,15 @@ export default function WizardShell({ children }: { children: React.ReactNode })
                             </button>
                             <button
                                 onClick={handleNext}
-                                disabled={currentStep === STEPS.length - 1}
-                                className="px-10 py-2.5 rounded-xl font-medium transition-all bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shadow-lg shadow-primary/10"
+                                disabled={isSaving}
+                                className="px-10 py-2.5 rounded-xl font-medium transition-all bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shadow-lg shadow-primary/10 flex items-center gap-2"
                             >
-                                {currentStep === STEPS.length - 1 ? t('finish') : t('next')}
+                                {currentStep === STEPS.length - 1 ? (
+                                    <>
+                                        <Save className="w-4 h-4" />
+                                        {t('finish')}
+                                    </>
+                                ) : t('next')}
                             </button>
                         </div>
                     </div>
@@ -165,6 +216,57 @@ export default function WizardShell({ children }: { children: React.ReactNode })
             <aside className="hidden lg:block w-96 border-l border-border bg-card/50 overflow-y-auto sticky top-0 h-screen">
                 <PreviewPanel />
             </aside>
+
+            {/* Save Prompt Modal */}
+            <Modal
+                isOpen={isSaveModalOpen}
+                onClose={() => setIsSaveModalOpen(false)}
+                title="Save Your Prompt"
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        Give your prompt a name to save it to your library.
+                    </p>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Prompt Name <span className="text-destructive">*</span></label>
+                        <input
+                            type="text"
+                            value={promptName}
+                            onChange={(e) => setPromptName(e.target.value)}
+                            placeholder="e.g., Cyberpunk City Rain"
+                            className="w-full p-3 rounded-xl bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Description (Optional)</label>
+                        <textarea
+                            value={promptDescription}
+                            onChange={(e) => setPromptDescription(e.target.value)}
+                            placeholder="Add some notes about this prompt..."
+                            className="w-full p-3 rounded-xl bg-background border border-border focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none h-24"
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                        <button
+                            onClick={() => setIsSaveModalOpen(false)}
+                            className="px-4 py-2 rounded-xl font-medium hover:bg-secondary transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleSaveConfirm}
+                            disabled={!promptName.trim() || isSaving}
+                            className="px-6 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50 transition-all active:scale-95"
+                        >
+                            {isSaving ? 'Saving...' : 'Save & View Library'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }
