@@ -19,6 +19,16 @@ export const translations = {
         signOut: "Sign Out",
         register: "Register",
 
+        // Home Page
+        homeTitle: "Veo 3",
+        homeSubtitle: "Prompt Builder",
+        homeTagline: "Craft high-quality cinematic video prompts with a guided wizard.",
+        homeDescription: "Perfect for local storytellers, creators, and prompt engineers.",
+        startBuilding: "Start Building",
+        storyBuilder: "Story Builder",
+        characterBuilder: "Character",
+        library: "Library",
+
         // Preview Panel
         livePreview: "Live Preview",
         copyPrompt: "Copy Prompt",
@@ -159,6 +169,16 @@ export const translations = {
         signIn: "লগ ইন",
         signOut: "লগ আউট",
         register: "রেজিস্ট্রেশন",
+
+        // Home Page
+        homeTitle: "ভিও ৩",
+        homeSubtitle: "প্রম্পট বিল্ডার",
+        homeTagline: "একটি গাইডেড উইজার্ড দিয়ে উচ্চমানের সিনেমাটিক ভিডিও প্রম্পট তৈরি করুন।",
+        homeDescription: "স্থানীয় গল্পকার, ক্রিয়েটর এবং প্রম্পট ইঞ্জিনিয়ারদের জন্য নিখুঁত।",
+        startBuilding: "তৈরি শুরু করুন",
+        storyBuilder: "স্টোরি বিল্ডার",
+        characterBuilder: "চরিত্র",
+        library: "লাইব্রেরি",
 
         // Preview Panel
         livePreview: "লাইভ প্রিভিউ",

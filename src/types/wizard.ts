@@ -48,6 +48,7 @@ export interface TechnicalState {
   realismLevel: string;
   safetyRating: string;
   constraints: string;
+  duration?: string; // e.g. "5s", "10s"
 }
 
 export interface PromptState {
@@ -78,6 +79,22 @@ export interface SavedCharacter {
   id: string;
   name: string;
   data: CharacterState;
+  prompt?: string; // Generated text prompt
+  createdAt: number;
+}
+
+export interface StyleState {
+  mood: string;
+  tone: string;
+  shotType: string;
+  cameraMovement: string;
+  lighting: string;
+}
+
+export interface SavedStyle {
+  id: string;
+  name: string;
+  data: StyleState;
   createdAt: number;
 }
 
@@ -143,5 +160,6 @@ export const initialPromptState: PromptState = {
     realismLevel: '',
     safetyRating: '',
     constraints: '',
+    duration: '',
   },
 };

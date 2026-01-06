@@ -3,15 +3,13 @@ import { useWizard } from './WizardProvider';
 import { STEPS } from '@/constants/options';
 import PreviewPanel from './PreviewPanel';
 import { validateStep } from '@/lib/prompt-utils';
-import { AlertCircle, Sun, Moon, User, LogOut, LogIn, Languages, Save, X } from 'lucide-react';
-import { useSession, signOut } from 'next-auth/react';
+import { AlertCircle, Save, X } from 'lucide-react';
 import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 import { useRouter } from 'next/navigation';
 
 export default function WizardShell({ children }: { children: React.ReactNode }) {
-    const { currentStep, setStep, isReady, state, theme, toggleTheme, language, toggleLanguage, t, savePreset, resetState } = useWizard();
-    const { data: session } = useSession();
+    const { currentStep, setStep, isReady, state, t, savePreset, resetState } = useWizard();
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
 
@@ -99,51 +97,6 @@ export default function WizardShell({ children }: { children: React.ReactNode })
                                     <h1 className="text-xl font-semibold text-foreground">
                                         {t(STEPS[currentStep].id as any)}
                                     </h1>
-                                </div>
-
-                                <button
-                                    onClick={toggleLanguage}
-                                    className="p-2 rounded-xl bg-secondary/50 border border-border text-foreground hover:bg-secondary transition-all active:scale-95 flex items-center gap-2 px-3"
-                                    title={`Switch to ${language === 'en' ? 'Bangla' : 'English'}`}
-                                >
-                                    <Languages className="w-4 h-4" />
-                                    <span className="text-xs font-bold uppercase">{language === 'en' ? 'EN' : 'BN'}</span>
-                                </button>
-
-                                <button
-                                    onClick={toggleTheme}
-                                    className="p-2 rounded-xl bg-secondary/50 border border-border text-foreground hover:bg-secondary transition-all active:scale-95"
-                                    title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-                                >
-                                    {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-                                </button>
-
-                                <div className="ml-2 flex items-center gap-2">
-                                    {session ? (
-                                        <div className="flex items-center gap-3">
-                                            <div className="hidden sm:block text-right">
-                                                <p className="text-xs font-semibold text-foreground truncate max-w-[100px]">{session.user?.name}</p>
-                                                <button
-                                                    onClick={() => signOut()}
-                                                    className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-0.5"
-                                                >
-                                                    <LogOut className="w-2.5 h-2.5" />
-                                                    {t('signOut')}
-                                                </button>
-                                            </div>
-                                            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                                                <User className="w-5 h-5" />
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <Link
-                                            href="/login"
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all active:scale-95"
-                                        >
-                                            <LogIn className="w-4 h-4" />
-                                            {t('signIn')}
-                                        </Link>
-                                    )}
                                 </div>
                             </div>
                             <span className="text-sm font-medium text-muted-foreground">

@@ -205,7 +205,7 @@ export default function CharacterLibraryPage() {
                                 </h3>
 
                                 <div className="text-sm text-muted-foreground mb-4 line-clamp-3 min-h-[4.5em] flex-1">
-                                    {char.data.description || 'No prompt description provided.'}
+                                    {char.prompt || char.data.description || 'No prompt description provided.'}
                                 </div>
 
                                 <div className="flex items-center justify-between text-xs text-muted-foreground mt-auto pt-4 border-t border-border">

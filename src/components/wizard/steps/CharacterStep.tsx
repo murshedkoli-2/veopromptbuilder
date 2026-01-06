@@ -19,7 +19,19 @@ export default function CharacterStep() {
 
     const handleSave = () => {
         if (!snippetName) return;
-        saveCharacter(snippetName);
+
+        // Generate a prompt string from attributes
+        const parts = [];
+        if (characters.ageGroup) parts.push(characters.ageGroup);
+        if (characters.role) parts.push(characters.role);
+        if (characters.attire) parts.push(`wearing ${characters.attire}`);
+        if (characters.emotions) parts.push(`Mood: ${characters.emotions}`);
+        if (characters.gestures) parts.push(`Action: ${characters.gestures}`);
+        if (characters.culturalNotes) parts.push(`Note: ${characters.culturalNotes}`);
+
+        const prompt = parts.join(', ');
+
+        saveCharacter(snippetName, prompt);
         setSnippetName('');
         setShowSave(false);
     };

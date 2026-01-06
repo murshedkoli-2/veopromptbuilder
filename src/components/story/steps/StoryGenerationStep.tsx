@@ -4,21 +4,31 @@ import { PromptState, initialPromptState } from '@/types/wizard';
 
 interface StoryGenerationStepProps {
     storyText: string;
+    videoStyle?: string;
+    audioStyle?: string;
+    voiceStyle?: string;
+    dialogueLanguage?: string;
     onComplete: (scenes: PromptState[]) => void;
 }
 
-export default function StoryGenerationStep({ storyText, onComplete }: StoryGenerationStepProps) {
+export default function StoryGenerationStep({
+    storyText,
+    videoStyle = 'Cinematic',
+    audioStyle = 'Immersive',
+    voiceStyle = 'Character Dialogue',
+    dialogueLanguage = 'English',
+    onComplete
+}: StoryGenerationStepProps) {
     const [progress, setProgress] = useState(0);
     const [status, setStatus] = useState('Analyzing story structure...');
 
     useEffect(() => {
-        // Mock Generation Process
         const phases = [
             { p: 10, s: 'Analyzing story structure...' },
-            { p: 30, s: 'Identifying characters...' },
+            { p: 30, s: `Applying ${videoStyle} visual style...` },
             { p: 50, s: 'Splitting into scenes...' },
-            { p: 70, s: 'Generating visual prompts...' },
-            { p: 90, s: 'Polishing details...' },
+            { p: 70, s: `Designing ${audioStyle} soundscape...` },
+            { p: 85, s: `Optimizing for ${voiceStyle} (${dialogueLanguage})...` },
             { p: 100, s: 'Done!' }
         ];
 
@@ -41,77 +51,158 @@ export default function StoryGenerationStep({ storyText, onComplete }: StoryGene
     }, []);
 
     const generateScenes = () => {
-        // Simple heuristic parser
-        // 1. Split by double newlines or periods followed by newlines
-        const rawScenes = storyText.split(/\n\s*\n/).filter(s => s.trim().length > 0);
+        // 1. Initial Split by Paragraphs
+        const paragraphs = storyText.split(/\n\s*\n/).filter(s => s.trim().length > 0);
+
+        // 2. Smart Segmentation for <8s limit (approx 20 words max)
+        const rawScenes: string[] = [];
+        const MAX_WORDS_PER_SCENE = 20;
+
+        paragraphs.forEach(para => {
+            const words = para.split(/\s+/).filter(w => w.length > 0);
+            if (words.length <= MAX_WORDS_PER_SCENE) {
+                rawScenes.push(para.trim());
+            } else {
+                // Split by sentences if too long
+                const sentences = para.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [para];
+                let currentChunk = "";
+
+                sentences.forEach(sentence => {
+                    const cleanSentence = sentence.trim();
+                    if (!cleanSentence) return;
+
+                    const currentLen = currentChunk.split(/\s+/).length;
+                    const sentenceLen = cleanSentence.split(/\s+/).length;
+
+                    if (currentLen + sentenceLen <= MAX_WORDS_PER_SCENE) {
+                        currentChunk += (currentChunk ? " " : "") + cleanSentence;
+                    } else {
+                        if (currentChunk) rawScenes.push(currentChunk);
+                        currentChunk = cleanSentence;
+                    }
+                });
+                if (currentChunk) rawScenes.push(currentChunk);
+            }
+        });
 
         const generatedScenes: PromptState[] = rawScenes.map(text => {
             const state = JSON.parse(JSON.stringify(initialPromptState)); // Deep copy
             const lower = text.toLowerCase();
+            const words = text.split(/\s+/).length;
+
             state.scene.envDescription = text.trim();
 
-            // --- Time & Lighting ---
-            if (lower.includes('night') || lower.includes('dark') || lower.includes('moon')) {
+            // --- Apply User Preferences ---
+            state.technical.realismLevel = videoStyle; // e.g. "Anime", "Cinematic"
+            state.dialogue.ambience = `${audioStyle}, ${voiceStyle}`; // e.g. "Sci-Fi FX, Voiceover"
+            state.dialogue.language = dialogueLanguage;
+
+            // Adjust framing based on voice style
+            if (voiceStyle === 'Character Dialogue') {
+                // Prefer closer shots for Lip Sync visibility
+                state.camera.notes = `Ensure characters face camera for dialogue. Language: ${dialogueLanguage}`;
+                state.dialogue.style = `Spoken in ${dialogueLanguage}`;
+            } else if (voiceStyle === 'Voiceover') {
+                state.camera.notes = 'Focus on environment and action';
+                state.dialogue.style = `Voiceover in ${dialogueLanguage}`;
+            }
+
+            // --- Duration Estimation (<8s for Veo 3) ---
+            const durationSec = Math.max(4, Math.min(8, Math.ceil(words / 2.5)));
+            state.technical.duration = `${durationSec}s`;
+
+            // --- Time of Day ---
+            if (/\b(night|midnight|dark|moon|stars)\b/.test(lower)) {
                 state.scene.timeOfDay = 'Night';
                 state.emotion.colorGrade = 'Cool High Contrast';
-            } else if (lower.includes('sunrise') || lower.includes('dawn')) {
+            } else if (/\b(sunrise|dawn|early morning)\b/.test(lower)) {
                 state.scene.timeOfDay = 'Dawn';
                 state.emotion.colorGrade = 'Warm Soft';
-            } else if (lower.includes('sunset') || lower.includes('dusk') || lower.includes('golden')) {
+            } else if (/\b(sunset|dusk|twilight|evening)\b/.test(lower)) {
                 state.scene.timeOfDay = 'Golden Hour';
                 state.emotion.colorGrade = 'Golden Warmth';
+            } else if (/\b(noon|midday|bright|sunny)\b/.test(lower)) {
+                state.scene.timeOfDay = 'Midday';
+                state.emotion.colorGrade = 'High Key';
             } else {
                 state.scene.timeOfDay = 'Day';
                 state.emotion.colorGrade = 'Natural';
             }
 
             // --- Location ---
-            if (lower.includes('interior') || lower.includes('inside') || lower.includes('room')) {
+            if (/\b(interior|inside|room|hall|kitchen|bedroom|office)\b/.test(lower)) {
                 state.scene.location = 'Interior';
-            } else if (lower.includes('exterior') || lower.includes('outside') || lower.includes('street') || lower.includes('sky')) {
+            } else if (/\b(exterior|outside|street|park|forest|city|mountain|sky)\b/.test(lower)) {
                 state.scene.location = 'Exterior';
             } else {
-                state.scene.location = 'Unknown';
+                state.scene.location = 'Cinematic Environment';
             }
 
-            // --- Camera Movement ---
-            if (lower.includes('run') || lower.includes('chase') || lower.includes('fast')) {
+            // --- Camera Movement & Shot Type ---
+            if (/\b(run|running|chase|fleeing|fast|sprint)\b/.test(lower)) {
                 state.camera.movement = 'Tracking Shot';
-                state.camera.lensStyle = 'Wide Angle';
-            } else if (lower.includes('walk') || lower.includes('enter') || lower.includes('slow')) {
+                state.camera.shotType = 'Wide Shot';
+                state.camera.lensStyle = '35mm Anamorphic';
+            } else if (/\b(walk|walking|stroll|enter|slowly)\b/.test(lower)) {
                 state.camera.movement = 'Slow Dolly';
-                state.camera.lensStyle = 'Standard';
-            } else if (lower.includes('sky') || lower.includes('city') || lower.includes('large')) {
-                state.camera.movement = 'Aerial Drone';
-                state.camera.lensStyle = 'Wide Angle';
-            } else if (lower.includes('look') || lower.includes('face') || lower.includes('eye')) {
+                state.camera.shotType = 'Medium Shot';
+            } else if (/\b(look|looking|stare|gaze|face|eyes)\b/.test(lower)) {
                 state.camera.movement = 'Static';
                 state.camera.shotType = 'Close Up';
-                state.camera.lensStyle = 'Portrait (85mm)';
-            } else {
+                state.camera.lensStyle = '85mm Portrait';
+            } else if (/\b(fight|battle|punch|hit|chaos)\b/.test(lower)) {
                 state.camera.movement = 'Handheld';
+                state.camera.shotType = 'Medium Close Up';
+                state.camera.notes = 'High shutter speed';
+            } else if (/\b(sky|city|landscape|world|over|above)\b/.test(lower)) {
+                state.camera.movement = 'Aerial Drone';
+                state.camera.shotType = 'Extreme Wide';
+            } else {
+                state.camera.movement = 'Cinematic Pan';
                 state.camera.shotType = 'Medium Shot';
             }
 
-            // --- Emotion ---
-            if (lower.includes('sad') || lower.includes('cry') || lower.includes('alone')) {
-                state.emotion.mood = 'Melancholic';
-                state.emotion.pacing = 'Slow';
-            } else if (lower.includes('happy') || lower.includes('laugh') || lower.includes('joy')) {
-                state.emotion.mood = 'Joyful';
-                state.emotion.pacing = 'Upbeat';
-            } else if (lower.includes('fear') || lower.includes('scared') || lower.includes('dark')) {
-                state.emotion.mood = 'Tense';
-                state.emotion.pacing = 'Fast';
-            } else {
-                state.emotion.mood = 'Neutral';
+            // Voice Style Override for Shot Type
+            if (voiceStyle === 'Character Dialogue' && !['Close Up', 'Medium Close Up'].includes(state.camera.shotType)) {
+                // Suggest closer shots if dialogue is key, but don't force override if it's an action scene (like 'run') unless necessary
+                if (!/\b(run|chase|fight)\b/.test(lower)) {
+                    state.camera.shotType = 'Medium Close Up';
+                }
             }
 
-            // Characters (Mock)
-            state.characters.count = 1;
-            state.characters.role = 'Main Character';
+            // --- Emotion & Mood ---
+            if (/\b(sad|cry|tears|lonely|alone|grief|loss)\b/.test(lower)) {
+                state.emotion.mood = 'Melancholic';
+                state.emotion.pacing = 'Slow';
+            } else if (/\b(happy|laugh|joy|smile|celebrate|fun)\b/.test(lower)) {
+                state.emotion.mood = 'Joyful';
+                state.emotion.pacing = 'Upbeat';
+            } else if (/\b(fear|scared|terror|hiding|danger|darkness)\b/.test(lower)) {
+                state.emotion.mood = 'Tense';
+                state.emotion.pacing = 'Fast';
+            } else if (/\b(love|kiss|hug|romantic|tender)\b/.test(lower)) {
+                state.emotion.mood = 'Romantic';
+                state.emotion.pacing = 'Gentle';
+                state.emotion.colorGrade = 'Soft Dreamy';
+            } else {
+                state.emotion.mood = 'Dramatic';
+                state.emotion.pacing = 'Medium';
+            }
+
+            // --- Character Estimation ---
+            const properNouns = text.match(/[A-Z][a-z]+/g) || [];
+            const commonWords = ['The', 'A', 'An', 'It', 'She', 'He', 'They', 'We', 'In', 'On', 'At', 'Then', 'But'];
+            const likelyNames = [...new Set(properNouns.filter(w => !commonWords.includes(w)))];
+
+            if (likelyNames.length > 0) {
+                state.characters.count = likelyNames.length;
+                state.characters.role = likelyNames.join(', ');
+            } else {
+                state.characters.count = 1;
+                state.characters.role = 'Protagonist';
+            }
+
             state.technical.resolution = '4k';
-            state.technical.realismLevel = 'Photorealistic';
 
             return state;
         });

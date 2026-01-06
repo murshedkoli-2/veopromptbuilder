@@ -32,6 +32,7 @@ export async function GET() {
             name: s.name,
             type: s.type,
             data: s.data,
+            prompt: s.prompt, // Include metadata prompt
             createdAt: s.createdAt,
         })),
         history: history.map(h => ({
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
             if (action === 'update') {
                 const snippet = await SnippetModel.findOneAndUpdate(
                     { _id: data.id, userId },
-                    { name: data.name, data: data.data },
+                    { name: data.name, data: data.data, prompt: data.prompt },
                     { new: true }
                 );
                 return NextResponse.json(snippet);

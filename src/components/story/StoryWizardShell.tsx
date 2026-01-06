@@ -25,19 +25,39 @@ export default function StoryWizardShell() {
     const [storyName, setStoryName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
+    // Style & Audio Preferences
+    const [videoStyle, setVideoStyle] = useState('Cinematic');
+    const [audioStyle, setAudioStyle] = useState('Immersive');
+    const [voiceStyle, setVoiceStyle] = useState('Character Dialogue'); // 'Character Dialogue' | 'Voiceover' | 'No Speech'
+    const [dialogueLanguage, setDialogueLanguage] = useState('English');
+
     const handleGenerate = () => {
         if (!storyText.trim()) return;
+        setGeneratedScenes([]); // Clear previous scenes
         setStep(1); // Go to generation
     };
 
-    const handleGenerationComplete = (scenes: PromptState[]) => {
+    const handleGenerationComplete = async (scenes: PromptState[]) => {
         setGeneratedScenes(scenes);
         setStep(2); // Go to review
+
+        // Auto-Save Logic
+        const timestamp = new Date().toLocaleString();
+        const shortName = storyText.split(' ').slice(0, 3).join(' ') || 'Untitled Story';
+        const autoName = `${shortName} (${timestamp})`;
+
+        // We don't block the UI for this, just fire and forget (or could show a toast)
+        await saveStory(autoName, storyText.substring(0, 100) + '...', scenes);
+        // Optional: Notify user via UI if toast component exists
     };
 
     const handleSave = async () => {
         if (!storyName.trim()) return;
         setIsSaving(true);
+        // Update the existing auto-saved story instead of creating new? 
+        // For now, simpler to just allow saving a "named" copy or updating metadata if we had the ID.
+        // Since `saveStory` creates a NEW entry currently in WizardProvider, this will create a duplicate.
+        // That's acceptable for "Save As" behavior. 
         await saveStory(storyName, storyText.substring(0, 100) + '...', generatedScenes);
         setIsSaving(false);
         setIsSaveModalOpen(false);
@@ -84,11 +104,23 @@ export default function StoryWizardShell() {
                     <StoryInputStep
                         storyText={storyText}
                         setStoryText={setStoryText}
+                        videoStyle={videoStyle}
+                        setVideoStyle={setVideoStyle}
+                        audioStyle={audioStyle}
+                        setAudioStyle={setAudioStyle}
+                        voiceStyle={voiceStyle}
+                        setVoiceStyle={setVoiceStyle}
+                        dialogueLanguage={dialogueLanguage}
+                        setDialogueLanguage={setDialogueLanguage}
                     />
                 )}
                 {step === 1 && (
                     <StoryGenerationStep
                         storyText={storyText}
+                        videoStyle={videoStyle}
+                        audioStyle={audioStyle}
+                        voiceStyle={voiceStyle}
+                        dialogueLanguage={dialogueLanguage}
                         onComplete={handleGenerationComplete}
                     />
                 )}

@@ -29,7 +29,7 @@ const SnippetSchema = new Schema({
     },
     type: {
         type: String,
-        enum: ['scene', 'character'],
+        enum: ['scene', 'character', 'style'],
         required: true,
     },
     name: {
@@ -39,6 +39,10 @@ const SnippetSchema = new Schema({
     data: {
         type: Object,
         required: true,
+    },
+    prompt: {
+        type: String,
+        required: false,
     },
 }, { timestamps: true });
 
