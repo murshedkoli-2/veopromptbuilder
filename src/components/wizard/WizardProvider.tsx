@@ -6,6 +6,7 @@ import {
     initialPromptState,
     Preset,
     SavedScene,
+    SceneState,
     SavedCharacter,
     StyleState,
     SavedStyle,
@@ -261,7 +262,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
 
         if (status === 'authenticated') {
             try {
-                await fetch('/api/user/data', {
+                const res = await fetch('/api/user/data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
